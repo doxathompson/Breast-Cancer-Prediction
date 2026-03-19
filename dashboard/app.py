@@ -126,7 +126,7 @@ def execute_prediction(features_dict, p_id):
                     with bar_col:
                         st.bar_chart(df_shap.set_index('Feature Name')['shap_value'], color="#e05c5c" if is_malignant else "#5cc8c8")
                     with table_col:
-                        st.dataframe(df_shap[['Feature Name', 'shap_value']].set_index('Feature Name'), use_container_width=True)
+                        st.dataframe(df_shap[['Feature Name', 'shap_value']].set_index('Feature Name'), width="stretch")
                         
             elif res.status_code == 401:
                 st.error("Authentication rejected. Ensure your auth credentials are correct.")
@@ -148,7 +148,7 @@ with main_tab1:
     if uploaded_file is not None:
         colimg, colexec = st.columns([1, 2])
         with colimg:
-            st.image(uploaded_file, caption="Uploaded FNA Slide", use_container_width=True)
+            st.image(uploaded_file, caption="Uploaded FNA Slide", width="stretch")
             
         with colexec:
             if st.button("Extract Geometric Features & Predict", type="primary"):
@@ -237,7 +237,7 @@ with main_tab2:
 
     col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
     with col_btn2:
-        submit = st.button("🚀 EXECUTE CLINICAL ASSESSMENT (MANUAL)", type="primary", use_container_width=True)
+        submit = st.button("🚀 EXECUTE CLINICAL ASSESSMENT (MANUAL)", type="primary", width="stretch")
 
     if submit:
         execute_prediction(manual_features, patient_id)
