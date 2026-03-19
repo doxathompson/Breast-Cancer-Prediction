@@ -7,8 +7,9 @@ Premium Streamlit dashboard for the Breast Cancer Predictor.
 import streamlit as st
 import requests
 import pandas as pd
+import os
 
-API_URL = "http://api:8000" if "docker" in __name__ else "http://localhost:8000"
+API_URL = os.environ.get("API_URL", "http://localhost:8000")
 AUTH = ("clinician", "secure_password_123")
 
 st.set_page_config(

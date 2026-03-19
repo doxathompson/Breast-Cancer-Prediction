@@ -20,5 +20,6 @@ services:
       - "8501:8501"
     environment:
       - PYTHONUNBUFFERED=1
+      - API_URL=http://api:8000
     depends_on:
       - api
