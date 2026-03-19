@@ -1,0 +1,40 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Data (Keep directory structure but ignore contents depending on size)
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Models Strategy (We usually avoid pushing large binary files via git)
+models/registry/*
+!models/registry/.gitkeep
+
+# Logs and Tracking
+mlruns/
+mlflow.db
+logs/
+*.log
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Pytest / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Exclude large generated reports
+reports/shap_plots/*
+!reports/shap_plots/.gitkeep

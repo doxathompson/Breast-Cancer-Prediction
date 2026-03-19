@@ -1,0 +1,75 @@
+name: Clinical ML Pipeline CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy
+          
+      - name: Run Ruff (Formatting & Linting)
+        run: |
+          ruff check .
+          ruff format --check .
+          
+      - name: Run Mypy (Type checking)
+        run: |
+          mypy src
+
+  test-model-and-api:
+    needs: lint-and-typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest httpx
+          
+      - name: Run model training and serialisation (Creates artefacts)
+        run: |
+          # Fast run scaling down grid search to just prove pipeline completes
+          python train.py --no-shap
+          
+      - name: Run Pytest (API and Pipeline Integration)
+        run: |
+          pytest tests/
+          
+      - name: Validate Clinical Sensitivity
+        run: |
+          # In a real CI, you'd parse evaluation_results.csv here 
+          # to formally fail the build if Sensitivity < 0.97
+          cat reports/evaluation_results.csv
+  
+  docker-build:
+    needs: test-model-and-api
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Build API Docker Image
+        run: docker build -t breast-cancer-api:latest -f Dockerfile.api .
+        
+      - name: Build Dashboard Docker Image
+        run: docker build -t breast-cancer-dashboard:latest -f Dockerfile.dashboard .

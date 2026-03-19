@@ -1,0 +1,110 @@
+# ============================================================
+#  Breast Cancer Predictor — Central Configuration
+#  All tunable parameters are declared here for reproducibility
+# ============================================================
+
+project:
+  name: "Breast Cancer Predictor"
+  version: "1.0.0"
+  random_state: 42
+  dataset_citation: "Wolberg et al. 1995 — UCI ML Repository ID 17"
+
+# ─── Paths ────────────────────────────────────────────────
+paths:
+  data_raw: "data/raw"
+  data_processed: "data/processed"
+  models_dir: "models/registry"
+  reports_dir: "reports"
+  shap_plots: "reports/shap_plots"
+  notebook: "notebooks/breast_cancer_pipeline.ipynb"
+
+# ─── Data ─────────────────────────────────────────────────
+data:
+  target_column: "target"         # 0=malignant, 1=benign  (sklearn convention)
+  test_size: 0.15
+  val_size: 0.15                  # fraction of train set used for validation
+  stratify: true
+
+# ─── Preprocessing ────────────────────────────────────────
+preprocessing:
+  correlation_threshold: 0.95     # drop features with pairwise corr > this
+  n_features_kbest: 15            # SelectKBest k value
+  pca_variance: 0.95              # retain 95% explained variance in PCA
+
+# ─── Class‑Imbalance ──────────────────────────────────────
+imbalance:
+  strategy: "class_weight"        # "class_weight" | "smote" | "both"
+  smote_k_neighbors: 5
+
+# ─── Models ───────────────────────────────────────────────
+models:
+  logistic_regression:
+    param_grid:
+      C: [0.001, 0.01, 0.1, 1, 10, 100]
+      solver: ["lbfgs"]
+      max_iter: [500]
+    class_weight: "balanced"
+
+  random_forest:
+    param_grid:
+      n_estimators: [100, 200, 300]
+      max_depth: [5, 10, 15, null]
+      min_samples_split: [2, 5, 10]
+      min_samples_leaf: [1, 2]
+    class_weight: "balanced"
+
+  xgboost:
+    param_grid:
+      learning_rate: [0.01, 0.05, 0.1, 0.2]
+      max_depth: [3, 5, 7]
+      n_estimators: [100, 200, 300]
+      subsample: [0.8, 1.0]
+    scale_pos_weight: 1.68        # 357 / 212 ≈ 1.68
+
+  svm:
+    param_grid:
+      C: [0.1, 1, 10, 100]
+      gamma: ["scale", "auto"]
+      kernel: ["rbf"]
+    class_weight: "balanced"
+    probability: true
+
+  mlp:
+    param_grid:
+      hidden_layer_sizes: [[64], [128], [64, 32], [128, 64]]
+      alpha: [0.0001, 0.001, 0.01]
+      learning_rate_init: [0.001, 0.01]
+      max_iter: [500]
+
+# ─── Cross‑Validation ─────────────────────────────────────
+cv:
+  n_splits: 5
+  scoring: "roc_auc"
+  n_jobs: -1
+  verbose: 1
+
+# ─── Clinical Thresholds ──────────────────────────────────
+clinical:
+  target_sensitivity: 0.97        # minimum recall on malignant class
+  youden_index_optimize: true     # use Youden J to pick optimal threshold
+  default_threshold: 0.5
+
+# ─── SHAP ─────────────────────────────────────────────────
+shap:
+  n_top_features: 10
+  background_samples: 100
+  beeswarm_max_display: 15
+
+# ─── API ──────────────────────────────────────────────────
+api:
+  host: "0.0.0.0"
+  port: 8000
+  model_path: "models/registry/best_model.joblib"
+  pipeline_path: "models/registry/preprocessor.joblib"
+
+# ─── Monitoring ───────────────────────────────────────────
+monitoring:
+  rolling_window_days: 30
+  auc_retraining_trigger: 0.95
+  drift_p_value_threshold: 0.05   # KS / PSI significance level
+  reference_data_path: "data/processed/reference_data.csv"
