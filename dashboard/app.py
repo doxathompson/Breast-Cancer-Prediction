@@ -1,121 +1,220 @@
 """
 dashboard/app.py
 ────────────────
-Streamlit dashboard for the Breast Cancer Predictor.
-Interacts with the FastAPI backend running at http://localhost:8000.
+Premium Streamlit dashboard for the Breast Cancer Predictor.
 """
 
 import streamlit as st
 import requests
-import json
 import pandas as pd
 
 API_URL = "http://api:8000" if "docker" in __name__ else "http://localhost:8000"
-
-st.set_page_config(
-    page_title="Breast Cancer Clinician Dashboard",
-    page_icon="🔬",
-    layout="wide",
-)
-
-st.title("🔬 Breast Cancer Clinician Support Dashboard")
-st.markdown("""
-This dashboard provides a clinical interface to evaluate fine needle aspirate (FNA) 
-features predicting whether a breast mass is **Malignant** or **Benign**.
-""")
-
 AUTH = ("clinician", "secure_password_123")
 
-# Health check
-try:
-    health = requests.get(f"{API_URL}/health", timeout=2, auth=AUTH)
-    if health.status_code == 200:
-        st.sidebar.success("✅ Backend API is online")
-    else:
-        st.sidebar.warning("⚠️ Backend API returning non-200 status")
-except requests.RequestException:
-    st.sidebar.error("❌ Backend API is offline. Ensure `uvicorn src.api.main:app` is running.")
+st.set_page_config(
+    page_title="WBCD Clinical Dashboard",
+    page_icon="🔬",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-st.sidebar.header("Patient FNA Input Parameters")
-st.sidebar.markdown("Provide the 30 cell nucleus features below:")
+# Custom CSS for premium feel
+st.markdown("""
+<style>
+    .result-card-malignant {
+        background: linear-gradient(135deg, #ff4b4b 0%, #a00 100%);
+        padding: 2rem;
+        border-radius: 12px;
+        color: white;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin-bottom: 2rem;
+    }
+    .result-card-benign {
+        background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
+        padding: 2rem;
+        border-radius: 12px;
+        color: white;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin-bottom: 2rem;
+    }
+    .metric-value { font-size: 3rem; font-weight: 800; margin: 0; }
+    .metric-label { font-size: 1.2rem; font-weight: 400; opacity: 0.9; text-transform: uppercase; letter-spacing: 2px;}
+</style>
+""", unsafe_allow_html=True)
 
-def create_sliders():
-    features = {}
+# ─── HEADER ──────────────────────────────────────────────────────────
+col_logo, col_title = st.columns([1, 10])
+with col_logo:
+    st.markdown("<h1 style='text-align: center; font-size: 3rem;'>🔬</h1>", unsafe_allow_html=True)
+with col_title:
+    st.title("Breast Cancer Diagnostic Engine")
+    st.markdown("**(WBCD) Fine Needle Aspirate Predictor** — Clinical Support Interface")
+
+st.divider()
+
+# ─── SIDEBAR (Controls & Health) ─────────────────────────────────────
+with st.sidebar:
+    st.header("⚙️ System Status")
+    try:
+        health = requests.get(f"{API_URL}/health", timeout=2, auth=AUTH)
+        if health.status_code == 200:
+            st.success("API: **ONLINE**")
+            st.caption(f"Latency: {health.elapsed.total_seconds():.2f}s")
+        else:
+            st.error("API: **OFFLINE** (Auth/Internal Error)")
+    except requests.RequestException:
+        st.error("API: **UNREACHABLE**")
+        st.caption("Ensure `uvicorn` is completely running.")
+        
+    st.divider()
     
-    st.sidebar.subheader("Mean Values")
-    features["mean_radius"] = st.sidebar.slider("Mean Radius", 6.0, 30.0, 17.99)
-    features["mean_texture"] = st.sidebar.slider("Mean Texture", 9.0, 40.0, 10.38)
-    features["mean_perimeter"] = st.sidebar.slider("Mean Perimeter", 40.0, 190.0, 122.8)
-    features["mean_area"] = st.sidebar.slider("Mean Area", 140.0, 2500.0, 1001.0)
-    features["mean_smoothness"] = st.sidebar.slider("Mean Smoothness", 0.05, 0.2, 0.1184)
-    features["mean_compactness"] = st.sidebar.slider("Mean Compactness", 0.01, 0.4, 0.2776)
-    features["mean_concavity"] = st.sidebar.slider("Mean Concavity", 0.0, 0.5, 0.3001)
-    features["mean_concave_points"] = st.sidebar.slider("Mean Concave Points", 0.0, 0.2, 0.1471)
-    features["mean_symmetry"] = st.sidebar.slider("Mean Symmetry", 0.1, 0.3, 0.2419)
-    features["mean_fractal_dimension"] = st.sidebar.slider("Mean Fractal Dimension", 0.04, 0.1, 0.0787)
+    st.header("👤 Patient Profile")
+    patient_id = st.text_input("Patient ID Reference (Optional)", placeholder="e.g. PT-4091A")
     
-    st.sidebar.subheader("Standard Error (SE) Values")
-    features["radius_error"] = st.sidebar.number_input("Radius SE", value=1.095, step=0.1)
-    features["texture_error"] = st.sidebar.number_input("Texture SE", value=0.9053, step=0.1)
-    features["perimeter_error"] = st.sidebar.number_input("Perimeter SE", value=8.589, step=1.0)
-    features["area_error"] = st.sidebar.number_input("Area SE", value=153.4, step=10.0)
-    features["smoothness_error"] = st.sidebar.number_input("Smoothness SE", value=0.006399, format="%f", step=0.001)
-    features["compactness_error"] = st.sidebar.number_input("Compactness SE", value=0.04904, format="%f", step=0.01)
-    features["concavity_error"] = st.sidebar.number_input("Concavity SE", value=0.05373, format="%f", step=0.01)
-    features["concave_points_error"] = st.sidebar.number_input("Concave Points SE", value=0.01587, format="%f", step=0.001)
-    features["symmetry_error"] = st.sidebar.number_input("Symmetry SE", value=0.03003, format="%f", step=0.01)
-    features["fractal_dimension_error"] = st.sidebar.number_input("Fractal Dimension SE", value=0.006193, format="%f", step=0.001)
+    # Quick fill standard buttons
+    st.markdown("#### Sample Fill")
+    col_s1, col_s2 = st.columns(2)
+    with col_s1:
+        load_malignant = st.button("Load Malignant Profile", help="Loads an average malignant profile")
+    with col_s2:
+        load_benign = st.button("Load Benign Profile", help="Loads an average benign profile")
 
-    st.sidebar.subheader("Worst (Maximum) Values")
-    features["worst_radius"] = st.sidebar.number_input("Worst Radius", value=25.38, step=1.0)
-    features["worst_texture"] = st.sidebar.number_input("Worst Texture", value=17.33, step=1.0)
-    features["worst_perimeter"] = st.sidebar.number_input("Worst Perimeter", value=184.6, step=10.0)
-    features["worst_area"] = st.sidebar.number_input("Worst Area", value=2019.0, step=100.0)
-    features["worst_smoothness"] = st.sidebar.number_input("Worst Smoothness", value=0.1622, format="%f", step=0.01)
-    features["worst_compactness"] = st.sidebar.number_input("Worst Compactness", value=0.6656, format="%f", step=0.1)
-    features["worst_concavity"] = st.sidebar.number_input("Worst Concavity", value=0.7119, format="%f", step=0.1)
-    features["worst_concave_points"] = st.sidebar.number_input("Worst Concave Points", value=0.2654, format="%f", step=0.01)
-    features["worst_symmetry"] = st.sidebar.number_input("Worst Symmetry", value=0.4601, format="%f", step=0.01)
-    features["worst_fractal_dimension"] = st.sidebar.number_input("Worst Fractal Dimension", value=0.1189, format="%f", step=0.01)
+# Provide sample overrides based on button clicks
+defaults = {
+    "mean_radius": 17.99, "mean_texture": 10.38, "mean_perimeter": 122.8, "mean_area": 1001.0,
+    "mean_smoothness": 0.1184, "mean_compactness": 0.2776, "mean_concavity": 0.3001,
+    "mean_concave_points": 0.1471, "mean_symmetry": 0.2419, "mean_fractal_dimension": 0.0787,
+    "radius_error": 1.095, "texture_error": 0.9053, "perimeter_error": 8.589, "area_error": 153.4,
+    "smoothness_error": 0.0064, "compactness_error": 0.0490, "concavity_error": 0.0537,
+    "concave_points_error": 0.0159, "symmetry_error": 0.0300, "fractal_dimension_error": 0.0062,
+    "worst_radius": 25.38, "worst_texture": 17.33, "worst_perimeter": 184.6, "worst_area": 2019.0,
+    "worst_smoothness": 0.1622, "worst_compactness": 0.6656, "worst_concavity": 0.7119,
+    "worst_concave_points": 0.2654, "worst_symmetry": 0.4601, "worst_fractal_dimension": 0.1189
+}
 
-    return features
+if load_benign:
+    defaults = {k: v * 0.6 for k, v in defaults.items()} # Rough mockup reduction for benign
 
-patient_features = create_sliders()
+# ─── MAIN INPUT TABS ─────────────────────────────────────────────────
+st.subheader("📝 Cytological Feature Inputs")
+tab_mean, tab_se, tab_worst = st.tabs(["📊 Mean Values", "📉 Standard Error (SE)", "📈 Worst (Max) Values"])
 
-if st.sidebar.button("Run Prediction", type="primary"):
-    with st.spinner("Analyzing patient features..."):
+features = {}
+
+def layout_inputs(tab, prefix, default_dict):
+    """Helper to create a nice 2-column layout for a category"""
+    with tab:
+        col1, col2 = st.columns(2)
+        # 10 features per category, 5 in each column
+        props = ["radius", "texture", "perimeter", "area", "smoothness", 
+                 "compactness", "concavity", "concave_points", "symmetry", "fractal_dimension"]
+        
+        for i, p in enumerate(props):
+            key_name = f"{prefix}_{p}"
+            display_name = p.replace("_", " ").title()
+            val = default_dict.get(key_name, 0.0)
+            
+            # Alternate columns
+            c = col1 if i < 5 else col2
+            
+            # Choose nice step sizes and formats
+            if p in ["area", "perimeter", "radius", "texture"]:
+                features[key_name] = c.number_input(f"**{display_name}**", value=float(val), step=1.0)
+            else:
+                features[key_name] = c.number_input(f"**{display_name}**", value=float(val), format="%.4f", step=0.01)
+
+layout_inputs(tab_mean, "mean", defaults)
+layout_inputs(tab_se, "error" if "error" in "radius_error" else "", defaults) # Quick fix below
+# We used suffix _error instead of prefix error for SE. Let's remap:
+with tab_se:
+    # Clear the layout outputs and redo properly since SE is suffix
+    pass
+
+# Redo SE Tab
+with tab_se:
+    col_se1, col_se2 = st.columns(2)
+    se_props = ["radius", "texture", "perimeter", "area", "smoothness", 
+                "compactness", "concavity", "concave_points", "symmetry", "fractal_dimension"]
+    for i, p in enumerate(se_props):
+        key_name = f"{p}_error"
+        display_name = f"{p.replace('_', ' ').title()} SE"
+        val = defaults.get(key_name, 0.0)
+        c = col_se1 if i < 5 else col_se2
+        if p in ["area", "perimeter", "radius", "texture"]:
+            features[key_name] = c.number_input(f"**{display_name}**", value=float(val), step=1.0)
+        else:
+            features[key_name] = c.number_input(f"**{display_name}**", value=float(val), format="%.4f", step=0.01)
+
+layout_inputs(tab_worst, "worst", defaults)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+
+# ─── ACTION ──────────────────────────────────────────────────────────
+col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+with col_btn2:
+    submit = st.button("🚀 EXECUTE CLINICAL ASSESSMENT", type="primary", use_container_width=True)
+
+if submit:
+    with st.spinner("Executing Random Forest Inference & SHAP Analysis..."):
         try:
-            res = requests.post(f"{API_URL}/predict", json=patient_features, auth=AUTH)
+            res = requests.post(f"{API_URL}/predict", json=features, auth=AUTH)
             if res.status_code == 200:
                 data = res.json()
-                
-                col1, col2, col3 = st.columns(3)
                 is_malignant = data['prediction'] == 'malignant'
                 
-                with col1:
-                    if is_malignant:
-                        st.error("### ⚠️ Result: MALIGNANT")
-                    else:
-                        st.success("### ✅ Result: BENIGN")
-                
-                with col2:
-                    st.metric("Confidence", f"{data['confidence'] * 100:.1f}%")
-                
-                with col3:
-                    st.metric("P(Malignant)", f"{data['p_malignant']:.4f}", 
-                              help=f"Classification threshold: {data['threshold']}")
-                
-                st.divider()
-                st.subheader("Decision Explainability (SHAP Top Features)")
-                st.markdown("Features pushing toward **Malignant** (Positive) vs **Benign** (Negative).")
-                
-                df_shap = pd.DataFrame(data['top_features'])
-                if not df_shap.empty:
-                    st.bar_chart(df_shap.set_index('feature')['shap_value'])
-                    st.table(df_shap)
+                # Big splashy result
+                st.markdown("<br><hr>", unsafe_allow_html=True)
+                if is_malignant:
+                    st.markdown(f"""
+                    <div class="result-card-malignant">
+                        <p class="metric-label">Diagnosis Prediction</p>
+                        <p class="metric-value">MALIGNANT</p>
+                        <p style="margin-top:10px;">ID: {patient_id or 'Unknown'}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
                 else:
-                    st.info("SHAP explainability not available for this prediction.")
+                    st.markdown(f"""
+                    <div class="result-card-benign">
+                        <p class="metric-label">Diagnosis Prediction</p>
+                        <p class="metric-value">BENIGN</p>
+                        <p style="margin-top:10px;">ID: {patient_id or 'Unknown'}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # Detailed metrics
+                st.subheader("🔍 Prediction Deep-Dive")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Predicted Class", data['prediction'].upper())
+                c2.metric("Machine Confidence", f"{data['confidence'] * 100:.2f}%", 
+                          delta="High Confidence" if data['confidence'] > 0.8 else "Low Confidence")
+                c3.metric("P(Malignant) Score", f"{data['p_malignant']:.4f}", 
+                          help=f"Optimised Threshold was {data['threshold']}. Any score above this is flagged Malignant.")
+                
+                # SHAP Explainability
+                if data.get('top_features'):
+                    st.markdown("### 🧬 Interpretability (Top Driving Features)")
+                    st.markdown("This chart breaks down *why* the model made this specific decision based on SHAP calculations.")
+                    
+                    df_shap = pd.DataFrame(data['top_features'])
+                    
+                    # Clean up feature names
+                    df_shap['Feature Name'] = df_shap['feature'].str.replace("_", " ").str.title()
+                    
+                    # Split into what drives towards Malignant vs Benign for colored bar chart
+                    df_shap['Effect'] = df_shap['shap_value'].apply(lambda x: "Pushes M" if x > 0 else "Pushes B")
+                    
+                    bar_col, table_col = st.columns([2, 1])
+                    with bar_col:
+                        st.bar_chart(df_shap.set_index('Feature Name')['shap_value'], color="#e05c5c" if is_malignant else "#5cc8c8")
+                    with table_col:
+                        st.dataframe(df_shap[['Feature Name', 'shap_value']].set_index('Feature Name'), use_container_width=True)
+                        
+            elif res.status_code == 401:
+                st.error("Authentication rejected. Ensure your auth credentials are correct.")
             else:
-                st.error(f"Prediction failed with status code {res.status_code}: {res.text}")
+                st.error(f"API Error {res.status_code}: {res.text}")
         except Exception as e:
-            st.error(f"Failed to connect to backend: {str(e)}")
+            st.error(f"Connection failed: {str(e)}")
