@@ -73,94 +73,11 @@ with st.sidebar:
     st.header("👤 Patient Profile")
     patient_id = st.text_input("Patient ID Reference (Optional)", placeholder="e.g. PT-4091A")
     
-    # Quick fill standard buttons
-    st.markdown("#### Sample Fill")
-    col_s1, col_s2 = st.columns(2)
-    with col_s1:
-        load_malignant = st.button("Load Malignant Profile", help="Loads an average malignant profile")
-    with col_s2:
-        load_benign = st.button("Load Benign Profile", help="Loads an average benign profile")
 
-# Provide sample overrides based on button clicks
-defaults = {
-    "mean_radius": 17.99, "mean_texture": 10.38, "mean_perimeter": 122.8, "mean_area": 1001.0,
-    "mean_smoothness": 0.1184, "mean_compactness": 0.2776, "mean_concavity": 0.3001,
-    "mean_concave_points": 0.1471, "mean_symmetry": 0.2419, "mean_fractal_dimension": 0.0787,
-    "radius_error": 1.095, "texture_error": 0.9053, "perimeter_error": 8.589, "area_error": 153.4,
-    "smoothness_error": 0.0064, "compactness_error": 0.0490, "concavity_error": 0.0537,
-    "concave_points_error": 0.0159, "symmetry_error": 0.0300, "fractal_dimension_error": 0.0062,
-    "worst_radius": 25.38, "worst_texture": 17.33, "worst_perimeter": 184.6, "worst_area": 2019.0,
-    "worst_smoothness": 0.1622, "worst_compactness": 0.6656, "worst_concavity": 0.7119,
-    "worst_concave_points": 0.2654, "worst_symmetry": 0.4601, "worst_fractal_dimension": 0.1189
-}
-
-if load_benign:
-    defaults = {k: v * 0.6 for k, v in defaults.items()} # Rough mockup reduction for benign
-
-# ─── MAIN INPUT TABS ─────────────────────────────────────────────────
-st.subheader("📝 Cytological Feature Inputs")
-tab_mean, tab_se, tab_worst = st.tabs(["📊 Mean Values", "📉 Standard Error (SE)", "📈 Worst (Max) Values"])
-
-features = {}
-
-def layout_inputs(tab, prefix, default_dict):
-    """Helper to create a nice 2-column layout for a category"""
-    with tab:
-        col1, col2 = st.columns(2)
-        # 10 features per category, 5 in each column
-        props = ["radius", "texture", "perimeter", "area", "smoothness", 
-                 "compactness", "concavity", "concave_points", "symmetry", "fractal_dimension"]
-        
-        for i, p in enumerate(props):
-            key_name = f"{prefix}_{p}"
-            display_name = p.replace("_", " ").title()
-            val = default_dict.get(key_name, 0.0)
-            
-            # Alternate columns
-            c = col1 if i < 5 else col2
-            
-            # Choose nice step sizes and formats
-            if p in ["area", "perimeter", "radius", "texture"]:
-                features[key_name] = c.number_input(f"**{display_name}**", value=float(val), step=1.0)
-            else:
-                features[key_name] = c.number_input(f"**{display_name}**", value=float(val), format="%.4f", step=0.01)
-
-layout_inputs(tab_mean, "mean", defaults)
-layout_inputs(tab_se, "error" if "error" in "radius_error" else "", defaults) # Quick fix below
-# We used suffix _error instead of prefix error for SE. Let's remap:
-with tab_se:
-    # Clear the layout outputs and redo properly since SE is suffix
-    pass
-
-# Redo SE Tab
-with tab_se:
-    col_se1, col_se2 = st.columns(2)
-    se_props = ["radius", "texture", "perimeter", "area", "smoothness", 
-                "compactness", "concavity", "concave_points", "symmetry", "fractal_dimension"]
-    for i, p in enumerate(se_props):
-        key_name = f"{p}_error"
-        display_name = f"{p.replace('_', ' ').title()} SE"
-        val = defaults.get(key_name, 0.0)
-        c = col_se1 if i < 5 else col_se2
-        if p in ["area", "perimeter", "radius", "texture"]:
-            features[key_name] = c.number_input(f"**{display_name}**", value=float(val), step=1.0)
-        else:
-            features[key_name] = c.number_input(f"**{display_name}**", value=float(val), format="%.4f", step=0.01)
-
-layout_inputs(tab_worst, "worst", defaults)
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-
-# ─── ACTION ──────────────────────────────────────────────────────────
-col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
-with col_btn2:
-    submit = st.button("🚀 EXECUTE CLINICAL ASSESSMENT", type="primary", use_container_width=True)
-
-if submit:
+def execute_prediction(features_dict, p_id):
     with st.spinner("Executing Random Forest Inference & SHAP Analysis..."):
         try:
-            res = requests.post(f"{API_URL}/predict", json=features, auth=AUTH)
+            res = requests.post(f"{API_URL}/predict", json=features_dict, auth=AUTH)
             if res.status_code == 200:
                 data = res.json()
                 is_malignant = data['prediction'] == 'malignant'
@@ -172,7 +89,7 @@ if submit:
                     <div class="result-card-malignant">
                         <p class="metric-label">Diagnosis Prediction</p>
                         <p class="metric-value">MALIGNANT</p>
-                        <p style="margin-top:10px;">ID: {patient_id or 'Unknown'}</p>
+                        <p style="margin-top:10px;">ID: {p_id or 'Unknown'}</p>
                     </div>
                     """, unsafe_allow_html=True)
                 else:
@@ -180,7 +97,7 @@ if submit:
                     <div class="result-card-benign">
                         <p class="metric-label">Diagnosis Prediction</p>
                         <p class="metric-value">BENIGN</p>
-                        <p style="margin-top:10px;">ID: {patient_id or 'Unknown'}</p>
+                        <p style="margin-top:10px;">ID: {p_id or 'Unknown'}</p>
                     </div>
                     """, unsafe_allow_html=True)
                 
@@ -202,8 +119,6 @@ if submit:
                     
                     # Clean up feature names
                     df_shap['Feature Name'] = df_shap['feature'].str.replace("_", " ").str.title()
-                    
-                    # Split into what drives towards Malignant vs Benign for colored bar chart
                     df_shap['Effect'] = df_shap['shap_value'].apply(lambda x: "Pushes M" if x > 0 else "Pushes B")
                     
                     bar_col, table_col = st.columns([2, 1])
@@ -218,3 +133,110 @@ if submit:
                 st.error(f"API Error {res.status_code}: {res.text}")
         except Exception as e:
             st.error(f"Connection failed: {str(e)}")
+
+
+# ─── MAIN TABS ───────────────────────────────────────────────────────
+main_tab1, main_tab2 = st.tabs(["🖼️ Computer Vision (Image Upload)", "🔢 Manual Tabular Data input"])
+
+
+with main_tab1:
+    st.subheader("Automated Slide Scanning")
+    st.markdown("Upload a Fine Needle Aspirate histopathology slide. A Computer Vision pipeline will mathematically extract 30 geometric cell nucleus parameters from the image and immediately forward them to the Random Forest diagnostic engine.")
+    
+    uploaded_file = st.file_uploader("Upload FNA Microscopy Image", type=["jpg", "png", "jpeg", "tif"])
+    if uploaded_file is not None:
+        colimg, colexec = st.columns([1, 2])
+        with colimg:
+            st.image(uploaded_file, caption="Uploaded FNA Slide", use_container_width=True)
+            
+        with colexec:
+            if st.button("Extract Geometric Features & Predict", type="primary"):
+                with st.spinner("Passing image through Deep Learning extraction pipeline..."):
+                    # Send to backend
+                    try:
+                        files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
+                        ext_res = requests.post(f"{API_URL}/extract-features", files=files, auth=AUTH)
+                        if ext_res.status_code == 200:
+                            extracted_features = ext_res.json()["extracted_features"]
+                            st.success("Successfully extracted 30 dimensions from image!")
+                            
+                            with st.expander("View Extracted Tabular Features (Hidden by default)"):
+                                st.json(extracted_features)
+                            
+                            # Forward straight to predict engine
+                            execute_prediction(extracted_features, patient_id)
+                        else:
+                            st.error(f"Extraction failed: {ext_res.text}")
+                    except Exception as e:
+                        st.error(f"Failed to reach extraction engine: {e}")
+
+with main_tab2:
+    st.markdown("#### Sample Fill")
+    col_s1, col_s2 = st.columns(2)
+    with col_s1:
+        load_malignant = st.button("Load Malignant Profile", help="Loads an average malignant profile")
+    with col_s2:
+        load_benign = st.button("Load Benign Profile", help="Loads an average benign profile")
+
+    # Provide sample overrides based on button clicks
+    defaults = {
+        "mean_radius": 17.99, "mean_texture": 10.38, "mean_perimeter": 122.8, "mean_area": 1001.0,
+        "mean_smoothness": 0.1184, "mean_compactness": 0.2776, "mean_concavity": 0.3001,
+        "mean_concave_points": 0.1471, "mean_symmetry": 0.2419, "mean_fractal_dimension": 0.0787,
+        "radius_error": 1.095, "texture_error": 0.9053, "perimeter_error": 8.589, "area_error": 153.4,
+        "smoothness_error": 0.0064, "compactness_error": 0.0490, "concavity_error": 0.0537,
+        "concave_points_error": 0.0159, "symmetry_error": 0.0300, "fractal_dimension_error": 0.0062,
+        "worst_radius": 25.38, "worst_texture": 17.33, "worst_perimeter": 184.6, "worst_area": 2019.0,
+        "worst_smoothness": 0.1622, "worst_compactness": 0.6656, "worst_concavity": 0.7119,
+        "worst_concave_points": 0.2654, "worst_symmetry": 0.4601, "worst_fractal_dimension": 0.1189
+    }
+
+    if load_benign:
+        defaults = {k: v * 0.6 for k, v in defaults.items()}
+        
+    st.subheader("📝 Cytological Feature Inputs")
+    tab_mean, tab_se, tab_worst = st.tabs(["📊 Mean Values", "📉 Standard Error (SE)", "📈 Worst (Max) Values"])
+
+    manual_features = {}
+
+    def layout_inputs(tab, prefix, default_dict):
+        with tab:
+            col1, col2 = st.columns(2)
+            props = ["radius", "texture", "perimeter", "area", "smoothness", 
+                     "compactness", "concavity", "concave_points", "symmetry", "fractal_dimension"]
+            for i, p in enumerate(props):
+                key_name = f"{prefix}_{p}"
+                display_name = p.replace("_", " ").title()
+                val = default_dict.get(key_name, 0.0)
+                c = col1 if i < 5 else col2
+                if p in ["area", "perimeter", "radius", "texture"]:
+                    manual_features[key_name] = c.number_input(f"**{display_name}**", value=float(val), step=1.0)
+                else:
+                    manual_features[key_name] = c.number_input(f"**{display_name}**", value=float(val), format="%.4f", step=0.01)
+
+    layout_inputs(tab_mean, "mean", defaults)
+
+    with tab_se:
+        col_se1, col_se2 = st.columns(2)
+        se_props = ["radius", "texture", "perimeter", "area", "smoothness", 
+                    "compactness", "concavity", "concave_points", "symmetry", "fractal_dimension"]
+        for i, p in enumerate(se_props):
+            key_name = f"{p}_error"
+            display_name = f"{p.replace('_', ' ').title()} SE"
+            val = defaults.get(key_name, 0.0)
+            c = col_se1 if i < 5 else col_se2
+            if p in ["area", "perimeter", "radius", "texture"]:
+                manual_features[key_name] = c.number_input(f"**{display_name}**", value=float(val), step=1.0)
+            else:
+                manual_features[key_name] = c.number_input(f"**{display_name}**", value=float(val), format="%.4f", step=0.01)
+
+    layout_inputs(tab_worst, "worst", defaults)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+    with col_btn2:
+        submit = st.button("🚀 EXECUTE CLINICAL ASSESSMENT (MANUAL)", type="primary", use_container_width=True)
+
+    if submit:
+        execute_prediction(manual_features, patient_id)

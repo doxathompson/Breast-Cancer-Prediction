@@ -24,7 +24,8 @@ from typing import Any
 
 import joblib
 import numpy as np
-from fastapi import FastAPI, HTTPException, Depends
+import hashlib
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from src.api.auth import get_current_user
@@ -234,6 +235,56 @@ async def model_info():
         "n_features": len(_feature_names),
         "features": _feature_names,
     }
+
+
+@app.post("/extract-features", tags=["Computer Vision"])
+async def extract_features_from_image(file: UploadFile = File(...), username: str = Depends(get_current_user)):
+    """
+    Simulated Computer Vision (CNN) pipeline. 
+    In a real hospital, this would pass the FNA histopathology slide image through a ResNet/EfficientNet 
+    to extract the 30 geometric cell nucleus parameters.
+    For this demo, we consistently mock the extracted features based on the image hash.
+    """
+    contents = await file.read()
+    img_hash = int(hashlib.md5(contents).hexdigest(), 16)
+    np.random.seed(img_hash % (2**32 - 1))
+    
+    # Generate realistic values based on typical WBCD bounds
+    features = {
+        "mean_radius": round(np.random.uniform(10.0, 25.0), 3),
+        "mean_texture": round(np.random.uniform(12.0, 30.0), 3),
+        "mean_perimeter": round(np.random.uniform(60.0, 160.0), 3),
+        "mean_area": round(np.random.uniform(300.0, 1500.0), 1),
+        "mean_smoothness": round(np.random.uniform(0.08, 0.12), 4),
+        "mean_compactness": round(np.random.uniform(0.05, 0.25), 4),
+        "mean_concavity": round(np.random.uniform(0.05, 0.35), 4),
+        "mean_concave_points": round(np.random.uniform(0.02, 0.15), 4),
+        "mean_symmetry": round(np.random.uniform(0.13, 0.25), 4),
+        "mean_fractal_dimension": round(np.random.uniform(0.05, 0.08), 5),
+        
+        "radius_error": round(np.random.uniform(0.2, 1.5), 4),
+        "texture_error": round(np.random.uniform(0.5, 3.0), 4),
+        "perimeter_error": round(np.random.uniform(1.0, 10.0), 4),
+        "area_error": round(np.random.uniform(10.0, 150.0), 4),
+        "smoothness_error": round(np.random.uniform(0.003, 0.01), 6),
+        "compactness_error": round(np.random.uniform(0.01, 0.06), 6),
+        "concavity_error": round(np.random.uniform(0.01, 0.08), 6),
+        "concave_points_error": round(np.random.uniform(0.005, 0.02), 6),
+        "symmetry_error": round(np.random.uniform(0.01, 0.04), 6),
+        "fractal_dimension_error": round(np.random.uniform(0.002, 0.01), 6),
+        
+        "worst_radius": round(np.random.uniform(12.0, 30.0), 3),
+        "worst_texture": round(np.random.uniform(15.0, 40.0), 3),
+        "worst_perimeter": round(np.random.uniform(80.0, 200.0), 3),
+        "worst_area": round(np.random.uniform(400.0, 2000.0), 1),
+        "worst_smoothness": round(np.random.uniform(0.1, 0.18), 4),
+        "worst_compactness": round(np.random.uniform(0.1, 0.7), 4),
+        "worst_concavity": round(np.random.uniform(0.1, 0.8), 4),
+        "worst_concave_points": round(np.random.uniform(0.05, 0.25), 4),
+        "worst_symmetry": round(np.random.uniform(0.2, 0.5), 4),
+        "worst_fractal_dimension": round(np.random.uniform(0.06, 0.12), 4),
+    }
+    return {"status": "success", "extracted_features": features}
 
 
 @app.post("/predict", response_model=PredictionResponse, tags=["Prediction"])
